@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+*.db
+backend/newsroom.db
+backend/demo.db
+.pytest_cache/
+node_modules/
+.DS_Store

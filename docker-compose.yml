@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-newsroom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-newsroom}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-newsroom}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ENV: production
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-newsroom}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-newsroom}
+      CORS_ORIGINS: ${CORS_ORIGINS:?set CORS_ORIGINS in .env, e.g. https://newsroom.example.com}
+      API_KEY: ${API_KEY:?set API_KEY in .env}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-25}
+      FACT_CHECK_THRESHOLD: ${FACT_CHECK_THRESHOLD:-70.0}
+      ENABLE_SCHEDULER: ${ENABLE_SCHEDULER:-false}
+      SCHEDULER_POLL_INTERVAL_SECONDS: ${SCHEDULER_POLL_INTERVAL_SECONDS:-60}
+      NEWSAPI_KEY: ${NEWSAPI_KEY:-}
+    volumes:
+      - uploads_data:/app/uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      BACKEND_API_URL: ${PUBLIC_BACKEND_API_URL:?set PUBLIC_BACKEND_API_URL in .env, e.g. https://api.newsroom.example.com}
+      FRONTEND_API_KEY: ${API_KEY}
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  db_data:
+  uploads_data:

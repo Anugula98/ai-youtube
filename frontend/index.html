@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Newsroom — Wire Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0c0f; --panel:#12161b; --panel-2:#181d24; --border:#252b33;
+    --text:#e8eaed; --muted:#818893; --dim:#4b525c;
+    --amber:#ffb020; --amber-dim:#8a611c;
+    --teal:#2dd4bf; --gold:#c9a961; --red:#ef4444; --green:#34d399;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Inter',system-ui,sans-serif; font-size:14px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .disp{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--dim);
+  }
+  a{color:inherit; text-decoration:none;}
+
+  #app{display:grid; grid-template-columns:200px 1fr; min-height:100vh;}
+
+  /* ---- Sidebar ---- */
+  nav{
+    background:var(--panel); border-right:1px solid var(--border);
+    padding:20px 14px; display:flex; flex-direction:column; gap:2px;
+  }
+  .brand{
+    font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:15px;
+    color:var(--text); margin-bottom:2px; letter-spacing:-.01em;
+  }
+  .brand span{color:var(--amber);}
+  .brand-sub{font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--dim); letter-spacing:.1em; margin-bottom:22px;}
+  .navlink{
+    padding:8px 10px; border-radius:5px; font-size:13px; color:var(--muted);
+    display:flex; align-items:center; gap:9px; cursor:pointer; transition:background .12s,color .12s;
+  }
+  .navlink:hover{background:var(--panel-2); color:var(--text);}
+  .navlink.active{background:var(--panel-2); color:var(--amber);}
+  .navlink .dot{width:5px; height:5px; border-radius:50%; background:currentColor; opacity:.6;}
+
+  /* ---- Main ---- */
+  main{padding:22px 28px 60px; max-width:1180px;}
+  .top-row{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:18px;}
+  h1{font-family:'Space Grotesk',sans-serif; font-size:20px; margin:0; font-weight:600;}
+  .clock{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--dim);}
+
+  /* Ticker */
+  .ticker{
+    background:var(--panel); border:1px solid var(--border); border-radius:6px;
+    padding:10px 16px; margin-bottom:22px; display:flex; gap:28px; overflow-x:auto;
+  }
+  .tick{display:flex; flex-direction:column; gap:2px; min-width:86px;}
+  .tick .n{font-family:'IBM Plex Mono',monospace; font-size:19px; font-weight:600;}
+  .tick .l{font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--dim); letter-spacing:.08em; text-transform:uppercase;}
+  .tick.amber .n{color:var(--amber);}
+  .tick.red .n{color:var(--red);}
+  .tick.green .n{color:var(--green);}
+
+  /* Panel */
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:8px;
+    margin-bottom:20px; overflow:hidden;
+  }
+  .panel-head{
+    padding:12px 16px; border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .panel-title{font-size:12.5px; font-weight:600; letter-spacing:.02em;}
+  .panel-body{padding:14px 16px;}
+
+  /* Pipeline rail — signature element */
+  .rail-row{padding:14px 16px; border-bottom:1px solid var(--border);}
+  .rail-row:last-child{border-bottom:none;}
+  .rail-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+  .rail-topic{font-size:13.5px; font-weight:500;}
+  .rail-meta{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--dim);}
+  .rail{display:flex; align-items:center;}
+  .rail-node{display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; position:relative;}
+  .rail-node:not(:last-child)::after{
+    content:''; position:absolute; top:6px; left:56%; width:88%; height:1.5px; background:var(--border);
+  }
+  .rail-node.done:not(:last-child)::after{background:var(--amber-dim);}
+  .rail-dot{
+    width:13px; height:13px; border-radius:50%; background:var(--panel-2);
+    border:1.5px solid var(--border); z-index:1;
+  }
+  .rail-node.done .rail-dot{background:var(--amber-dim); border-color:var(--amber-dim);}
+  .rail-node.current .rail-dot{background:var(--amber); border-color:var(--amber); box-shadow:0 0 0 3px rgba(255,176,32,.18); animation:pulse 1.8s ease-in-out infinite;}
+  .rail-node.blocked .rail-dot{background:var(--red); border-color:var(--red);}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 3px rgba(255,176,32,.18);} 50%{box-shadow:0 0 0 5px rgba(255,176,32,.08);}}
+  .rail-label{font-family:'IBM Plex Mono',monospace; font-size:8.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em;}
+  .rail-node.done .rail-label, .rail-node.current .rail-label{color:var(--muted);}
+
+  .badge{
+    font-family:'IBM Plex Mono',monospace; font-size:9.5px; padding:2px 7px; border-radius:3px;
+    letter-spacing:.04em; text-transform:uppercase; border:1px solid transparent;
+  }
+  .badge.blocked{color:var(--red); background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.25);}
+  .badge.review{color:var(--gold); background:rgba(201,169,97,.1); border-color:rgba(201,169,97,.25);}
+  .badge.progress{color:var(--amber); background:rgba(255,176,32,.1); border-color:rgba(255,176,32,.25);}
+  .badge.ready{color:var(--green); background:rgba(52,211,153,.1); border-color:rgba(52,211,153,.25);}
+  .badge.notstarted{color:var(--dim); background:rgba(255,255,255,.03); border-color:var(--border);}
+
+  /* Queue table */
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:9.5px; color:var(--dim);
+    text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border);
+  }
+  td{padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--panel-2);}
+  .mono-sm{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);}
+
+  /* Create form */
+  .field{margin-bottom:12px;}
+  .field label{display:block; font-size:11px; color:var(--muted); margin-bottom:5px;}
+  input, select, textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); border-radius:5px;
+    color:var(--text); padding:8px 10px; font-family:'Inter',sans-serif; font-size:13px;
+  }
+  input:focus, select:focus, textarea:focus{outline:none; border-color:var(--amber-dim);}
+  button{
+    background:var(--amber); color:#1a1200; border:none; border-radius:5px; padding:9px 16px;
+    font-family:'Inter',sans-serif; font-weight:600; font-size:13px; cursor:pointer;
+  }
+  button:hover{background:#ffc247;}
+  button.ghost{background:transparent; border:1px solid var(--border); color:var(--muted);}
+  button.ghost:hover{color:var(--text); border-color:var(--muted);}
+
+  .empty{padding:40px 20px; text-align:center; color:var(--dim); font-size:12.5px;}
+  .row-flex{display:flex; gap:10px; flex-wrap:wrap;}
+
+  .claim-row{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border); gap:12px;}
+  .claim-row:last-child{border-bottom:none;}
+  .vs{font-family:'IBM Plex Mono',monospace; font-size:9.5px; padding:2px 6px; border-radius:3px; white-space:nowrap; height:fit-content;}
+  .vs.VERIFIED{color:var(--green); background:rgba(52,211,153,.1);}
+  .vs.PARTIALLY_VERIFIED{color:var(--teal); background:rgba(45,212,191,.1);}
+  .vs.REPORTED{color:var(--gold); background:rgba(201,169,97,.1);}
+  .vs.RUMOR{color:var(--muted); background:rgba(255,255,255,.05);}
+  .vs.CONTRADICTED, .vs.UNSUPPORTED, .vs.FALSE{color:var(--red); background:rgba(239,68,68,.1);}
+</style>
+</head>
+<body>
+<div id="app">
+  <nav>
+    <div class="brand">WIRE<span>DESK</span></div>
+    <div class="brand-sub">AI NEWSROOM OS</div>
+    <div class="navlink active" data-view="dashboard"><span class="dot"></span>Dashboard</div>
+    <div class="navlink" data-view="queue"><span class="dot"></span>Content Queue</div>
+    <div class="navlink" data-view="calendar"><span class="dot"></span>Calendar</div>
+    <div class="navlink" data-view="idea-vault"><span class="dot"></span>Idea Vault</div>
+    <div class="navlink" data-view="create"><span class="dot"></span>Create Content</div>
+    <div class="navlink" data-view="settings"><span class="dot"></span>Settings</div>
+    <div class="navlink" data-view="detail" style="display:none;"><span class="dot"></span>Project Detail</div>
+  </nav>
+  <main>
+    <div class="top-row">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="clock mono" id="clock"></div>
+    </div>
+    <div id="view-root"></div>
+  </main>
+</div>
+
+<!-- env.js sets window.__API_BASE_URL__ at container start (see docker-entrypoint.sh);
+     falls back to localhost:8000 for `open index.html` local dev. -->
+<script src="env.js"></script>
+<script>
+const API = (window.__API_BASE_URL__ || "http://localhost:8000") + "/api";
+const API_KEY = window.__API_KEY__ || null;
+const STAGES = ["AV","RESEARCH","FACT_CHECK","SCRIPT","VOICE","VISUALS","COPYRIGHT","THUMBNAIL","PUBLISH"];
+const STAGE_LABEL = {AV:"AV",RESEARCH:"RSRCH",FACT_CHECK:"FACT",SCRIPT:"SCRPT",VOICE:"VOICE",
+  VISUALS:"VISUL",COPYRIGHT:"COPYR",THUMBNAIL:"THMB",PUBLISH:"PUB"};
+
+function tick(){
+  document.getElementById('clock').textContent =
+    new Date().toUTCString().slice(0,25) + ' UTC';
+}
+tick(); setInterval(tick, 1000);
+
+document.querySelectorAll('.navlink[data-view]').forEach(el=>{
+  el.addEventListener('click', ()=> navigate(el.dataset.view));
+});
+
+function navigate(view, param){
+  document.querySelectorAll('.navlink').forEach(n=>n.classList.remove('active'));
+  const link = document.querySelector(`.navlink[data-view="${view}"]`);
+  if(link){ link.style.display='flex'; link.classList.add('active'); }
+  const titles = {dashboard:"Dashboard", queue:"Content Queue", calendar:"Calendar",
+    "idea-vault":"Idea Vault", create:"Create Content", settings:"Settings", detail:"Project Detail"};
+  document.getElementById('page-title').textContent = titles[view] || view;
+  if(view==='dashboard') renderDashboard();
+  if(view==='queue') renderQueue();
+  if(view==='calendar') renderCalendar();
+  if(view==='idea-vault') renderIdeaVault();
+  if(view==='create') renderCreate();
+  if(view==='settings') renderSettings();
+  if(view==='detail') renderDetail(param);
+}
+
+async function api(path, opts={}){
+  const headers = Object.assign({}, opts.headers || {});
+  if(API_KEY) headers['X-API-Key'] = API_KEY;
+  try{
+    const res = await fetch(API+path, Object.assign({}, opts, {headers}));
+    if(!res.ok) throw new Error(await res.text());
+    return await res.json();
+  }catch(e){
+    document.getElementById('view-root').innerHTML =
+      `<div class="empty">Can't reach the API at <span class="mono">${API}</span>.<br>
+       Start the backend: <span class="mono">cd backend && uvicorn app.main:app --reload --port 8000</span>
+       <br><br><span class="mono" style="color:var(--red)">${e.message}</span></div>`;
+    throw e;
+  }
+}
+
+// Like api(), but for optional data that may legitimately not exist yet
+// (e.g. no Quality Gate result until PUBLISH has run) -- returns null on
+// any failure instead of rendering the fatal "can't reach API" screen.
+async function apiSoft(path){
+  try{
+    const headers = {};
+    if(API_KEY) headers['X-API-Key'] = API_KEY;
+    const res = await fetch(API+path, {headers});
+    if(!res.ok) return null;
+    return await res.json();
+  }catch(e){ return null; }
+}
+
+function stateBadge(state){
+  const map = {BLOCKED:'blocked', NEEDS_REVIEW:'review', IN_PROGRESS:'progress',
+    READY_TO_PUBLISH:'ready', NOT_STARTED:'notstarted', PUBLISHED:'ready', DO_NOT_PUBLISH:'blocked', REJECTED:'blocked'};
+  return `<span class="badge ${map[state]||'notstarted'}">${state.replace(/_/g,' ')}</span>`;
+}
+
+function railHTML(currentStage, state){
+  const curIdx = STAGES.indexOf(currentStage);
+  return `<div class="rail">` + STAGES.map((s,i)=>{
+    let cls = 'pending';
+    if(i < curIdx) cls = 'done';
+    else if(i === curIdx) cls = (state==='BLOCKED') ? 'blocked' : 'current';
+    return `<div class="rail-node ${cls}">
+      <div class="rail-dot"></div>
+      <div class="rail-label">${STAGE_LABEL[s]}</div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+// ---------- DASHBOARD ----------
+async function renderDashboard(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading today's metrics…</div>`;
+  const [today, projects] = await Promise.all([api('/today'), api('/projects')]);
+
+  root.innerHTML = `
+    <div class="ticker">
+      <div class="tick amber"><div class="n">${today.full_videos.done}/${today.full_videos.target}</div><div class="l">Full videos</div></div>
+      <div class="tick"><div class="n">${today.in_production}</div><div class="l">In production</div></div>
+      <div class="tick" style="color:var(--gold)"><div class="n">${today.needs_review}</div><div class="l">Needs review</div></div>
+      <div class="tick red"><div class="n">${today.blocked}</div><div class="l">Blocked</div></div>
+      <div class="tick green"><div class="n">${today.ready}</div><div class="l">Ready</div></div>
+      <div class="tick"><div class="n">${today.total_projects}</div><div class="l">Total projects</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">ACTIVE PIPELINE</div>
+        <div class="eyebrow">AV → RESEARCH → FACT CHECK → SCRIPT → VOICE → VISUALS → COPYRIGHT → THUMBNAIL → PUBLISH</div>
+      </div>
+      <div id="pipeline-rows">
+        ${projects.length === 0 ? `<div class="empty">No projects yet. <a href="#" onclick="navigate('create');return false;" style="color:var(--amber)">Create one →</a></div>` : ''}
+      </div>
+    </div>
+  `;
+
+  const rowsEl = document.getElementById('pipeline-rows');
+  projects.forEach(p=>{
+    const row = document.createElement('div');
+    row.className = 'rail-row';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `
+      <div class="rail-top">
+        <div class="rail-topic">${p.title}</div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="rail-meta">${p.content_type} · #${p.id}</span>
+          ${stateBadge(p.pipeline_state)}
+        </div>
+      </div>
+      ${railHTML(p.current_stage, p.pipeline_state)}
+    `;
+    row.addEventListener('click', ()=> navigate('detail', p.id));
+    rowsEl.appendChild(row);
+  });
+}
+
+// ---------- QUEUE ----------
+async function renderQueue(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading queue…</div>`;
+  const projects = await api('/projects');
+  root.innerHTML = `
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">TODAY'S QUEUE</div></div>
+      <table>
+        <thead><tr><th>Topic</th><th>Type</th><th>Priority</th><th>Stage</th><th>Status</th><th>Updated</th></tr></thead>
+        <tbody id="queue-body"></tbody>
+      </table>
+      ${projects.length === 0 ? '<div class="empty">Queue is empty.</div>' : ''}
+    </div>
+  `;
+  const body = document.getElementById('queue-body');
+  projects.forEach(p=>{
+    const tr = document.createElement('tr');
+    tr.style.cursor = 'pointer';
+    tr.innerHTML = `
+      <td>${p.title}</td>
+      <td class="mono-sm">${p.content_type}</td>
+      <td class="mono-sm">${p.priority}</td>
+      <td class="mono-sm">${p.current_stage}</td>
+      <td>${stateBadge(p.pipeline_state)}</td>
+      <td class="mono-sm">${new Date(p.updated_at).toISOString().slice(0,16).replace('T',' ')}</td>
+    `;
+    tr.addEventListener('click', ()=> navigate('detail', p.id));
+    body.appendChild(tr);
+  });
+}
+
+// ---------- CALENDAR ----------
+let _calendarDate = new Date().toISOString().slice(0,10);
+let _calConfigOpen = false;
+
+async function renderCalendar(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading calendar…</div>`;
+  const [data, config] = await Promise.all([
+    api(`/calendar?date=${_calendarDate}`), api('/schedule-config')
+  ]);
+
+  root.innerHTML = `
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">CONTENT CALENDAR</div>
+        <div class="row-flex">
+          <input type="date" id="cal-date" value="${_calendarDate}" style="width:auto;">
+          <button class="ghost" onclick="changeCalendarDate()">Go</button>
+          <button class="ghost" onclick="runSchedulerTickNow()">Run scheduler tick now</button>
+          <button class="ghost" onclick="toggleCalConfig()">${_calConfigOpen ? 'Hide' : 'Edit'} schedule config</button>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Time</th><th>Kind</th><th>Assigned project</th><th>Status</th></tr></thead>
+        <tbody>
+        ${data.slots.map(s=>`
+          <tr>
+            <td class="mono-sm">${s.time.slice(11,16)}</td>
+            <td class="mono-sm">${s.content_kind === 'SHORT' ? 'Short' : 'Full Video'}</td>
+            <td>${s.project ? s.project.title : '<span class="rail-meta">open slot</span>'}</td>
+            <td>${s.project ? stateBadge(s.project.pipeline_state) : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      ${data.slots.length === 0 ? '<div class="empty">No slots configured for this day — check schedule config.</div>' : ''}
+    </div>
+    <div class="rail-meta" style="padding:0 4px 14px;">
+      Proposed layout from the current schedule config (${data.slots.filter(s=>s.content_kind==='SHORT').length} Short slots,
+      ${data.slots.filter(s=>s.content_kind==='FULL_VIDEO').length} Full Video slots). "Run scheduler tick now" fills any open
+      slot in the next 15 minutes with the highest-opportunity matching Idea Vault entry and runs it through the pipeline.
+    </div>
+    ${_calConfigOpen ? `
+    <div class="panel" style="max-width:480px;">
+      <div class="panel-head"><div class="panel-title">SCHEDULE CONFIG</div></div>
+      <div class="panel-body">
+        <div class="field"><label>Full videos per day</label><input id="cfg-full" type="number" value="${config.full_videos_per_day}"></div>
+        <div class="field"><label>Shorts interval (minutes)</label><input id="cfg-interval" type="number" value="${config.shorts_interval_minutes}"></div>
+        <div class="field"><label>Publishing window start (HH:MM)</label><input id="cfg-start" value="${config.publishing_window_start}"></div>
+        <div class="field"><label>Publishing window end (HH:MM)</label><input id="cfg-end" value="${config.publishing_window_end}"></div>
+        <div class="field"><label>Quality threshold</label><input id="cfg-quality" type="number" value="${config.quality_threshold}"></div>
+        <button onclick="saveScheduleConfig()">Save</button>
+      </div>
+    </div>` : ''}
+  `;
+}
+
+function changeCalendarDate(){
+  _calendarDate = document.getElementById('cal-date').value || _calendarDate;
+  renderCalendar();
+}
+
+function toggleCalConfig(){
+  _calConfigOpen = !_calConfigOpen;
+  renderCalendar();
+}
+
+async function saveScheduleConfig(){
+  await api('/schedule-config', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      full_videos_per_day: parseInt(document.getElementById('cfg-full').value) || 0,
+      shorts_per_day: 24,
+      shorts_interval_minutes: parseInt(document.getElementById('cfg-interval').value) || 30,
+      publishing_window_start: document.getElementById('cfg-start').value || '09:00',
+      publishing_window_end: document.getElementById('cfg-end').value || '21:00',
+      weekday_overrides: {}, weekend_overrides: {},
+      quality_threshold: parseFloat(document.getElementById('cfg-quality').value) || 85,
+    })
+  });
+  renderCalendar();
+}
+
+async function runSchedulerTickNow(){
+  const result = await api('/scheduler/tick', {method:'POST'});
+  alert(result.actions.length === 0
+    ? 'No open slots in the next 15 minutes had a matching Idea Vault entry — nothing to do.'
+    : `Filled ${result.actions.length} slot(s) with new project(s).`);
+  renderCalendar();
+}
+
+// ---------- IDEA VAULT ----------
+async function renderIdeaVault(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading idea vault…</div>`;
+  const ideas = await api('/idea-vault');
+
+  root.innerHTML = `
+    <div class="row-flex" style="align-items:flex-start;">
+    <div class="panel" style="max-width:400px;">
+      <div class="panel-head"><div class="panel-title">ADD IDEA</div></div>
+      <div class="panel-body">
+        <div class="field"><label>Topic</label><input id="idea-topic" placeholder="e.g. New AI chip announcement"></div>
+        <div class="field"><label>Opportunity score (0-100)</label><input id="idea-score" type="number" value="50"></div>
+        <button onclick="submitIdea()">Add to vault</button>
+      </div>
+    </div>
+    <div class="panel" style="max-width:400px;">
+      <div class="panel-head"><div class="panel-title">DISCOVER TOPICS</div></div>
+      <div class="panel-body">
+        <div class="rail-meta" style="margin-bottom:10px;">Runs the Discovery agent for a category and adds its proposals directly to the vault below.</div>
+        <div class="field"><label>Category</label><input id="discover-category" placeholder="e.g. smartphones, GPUs, AI hardware" value="general technology"></div>
+        <div class="field"><label>How many ideas</label><input id="discover-count" type="number" value="5"></div>
+        <button onclick="discoverTopics()">Discover</button>
+      </div>
+    </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">IDEA VAULT (${ideas.length})</div></div>
+      <table>
+        <thead><tr><th>Topic</th><th>Score</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        ${ideas.map(i=>`
+          <tr>
+            <td>${i.topic}</td>
+            <td class="mono-sm">${i.opportunity_score}</td>
+            <td class="mono-sm">${i.status}</td>
+            <td>${i.status === 'NEW' ? `<button class="ghost" onclick="promoteIdea(${i.id})">Promote to project</button>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      ${ideas.length === 0 ? '<div class="empty">No ideas yet.</div>' : ''}
+    </div>
+  `;
+}
+
+async function submitIdea(){
+  const topic = document.getElementById('idea-topic').value;
+  if(!topic){ alert('Topic is required.'); return; }
+  await api('/idea-vault', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({topic, opportunity_score: parseFloat(document.getElementById('idea-score').value)||0})
+  });
+  renderIdeaVault();
+}
+
+async function discoverTopics(){
+  const category = document.getElementById('discover-category').value || 'general technology';
+  const count = parseInt(document.getElementById('discover-count').value) || 5;
+  await api(`/idea-vault/discover?category=${encodeURIComponent(category)}&count=${count}`, {method:'POST'});
+  renderIdeaVault();
+}
+
+async function promoteIdea(id){
+  const project = await api(`/idea-vault/${id}/promote`, {method:'POST'});
+  navigate('detail', project.id);
+}
+
+
+
+function renderCreate(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `
+    <div class="panel" style="max-width:520px;">
+      <div class="panel-head"><div class="panel-title">NEW PROJECT</div></div>
+      <div class="panel-body">
+        <div class="field"><label>Topic</label>
+          <input id="f-topic" placeholder="e.g. Samsung Galaxy S27 Ultra camera features"></div>
+        <div class="field"><label>Title</label>
+          <input id="f-title" placeholder="Internal working title"></div>
+        <div class="field"><label>Content type</label>
+          <select id="f-type">
+            <option value="NEWS">News</option>
+            <option value="BREAKING_NEWS">Breaking News</option>
+            <option value="LONG_FORM">Long-form Video</option>
+            <option value="SHORT">YouTube Short</option>
+            <option value="PRODUCT_REVIEW">Product Review</option>
+            <option value="UNBOXING">Unboxing</option>
+            <option value="PRODUCT_FEATURES">Product Features</option>
+            <option value="PRODUCT_COMPARISON">Product Comparison</option>
+            <option value="BUYING_GUIDE">Buying Guide</option>
+            <option value="EXPLAINER">Explainer</option>
+            <option value="RUMOR_LEAK">Rumor / Leak</option>
+            <option value="SOFTWARE_OS">Software / OS</option>
+            <option value="AI_NEWS">AI News</option>
+          </select></div>
+        <div class="field"><label>Duration target (seconds)</label>
+          <input id="f-duration" type="number" value="300"></div>
+        <div class="field"><label>Target audience</label>
+          <input id="f-audience" placeholder="e.g. Android enthusiasts deciding whether to upgrade"></div>
+        <div class="field"><label>Tone</label>
+          <input id="f-tone" placeholder="e.g. informative, no hype"></div>
+        <div class="field"><label>Language</label>
+          <input id="f-language" value="en" style="width:80px;"></div>
+        <div class="field"><label>Reference URLs (one per line)</label>
+          <textarea id="f-urls" rows="2" placeholder="https://..."></textarea></div>
+        <div class="field"><label>Pipeline mode</label>
+          <select id="f-mode">
+            <option value="REVIEW">Review (pause for approval at key stages)</option>
+            <option value="AUTO">Auto (run straight through gates)</option>
+          </select></div>
+        <div class="field"><label>User instructions</label>
+          <textarea id="f-instructions" rows="2" placeholder="Optional notes for the agents"></textarea></div>
+        <button onclick="submitCreate()">Create project</button>
+      </div>
+    </div>
+  `;
+}
+
+async function submitCreate(){
+  const urlsRaw = document.getElementById('f-urls').value || '';
+  const source_urls = urlsRaw.split('\n').map(u => u.trim()).filter(Boolean);
+  const payload = {
+    title: document.getElementById('f-title').value || document.getElementById('f-topic').value,
+    topic: document.getElementById('f-topic').value,
+    content_type: document.getElementById('f-type').value,
+    duration_target_seconds: parseInt(document.getElementById('f-duration').value) || null,
+    target_audience: document.getElementById('f-audience').value || null,
+    tone: document.getElementById('f-tone').value || null,
+    language: document.getElementById('f-language').value || 'en',
+    source_urls: source_urls,
+    pipeline_mode: document.getElementById('f-mode').value,
+    user_instructions: document.getElementById('f-instructions').value || null,
+  };
+  if(!payload.topic){ alert('Topic is required.'); return; }
+  const project = await api('/projects', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  navigate('detail', project.id);
+}
+
+// ---------- SETTINGS ----------
+async function renderSettings(){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading settingsâ€¦</div>`;
+  const cfg = await api('/youtube-config');
+  root.innerHTML = `
+    <div class="row-flex" style="align-items:flex-start;">
+      <div class="panel" style="max-width:560px;">
+        <div class="panel-head"><div class="panel-title">YOUTUBE CONFIGURATION</div></div>
+        <div class="panel-body">
+          <div class="field"><label>Channel ID</label>
+            <input id="yt-channel-id" value="${cfg.channel_id || ''}" placeholder="UC..."></div>
+          <div class="field"><label>Channel name</label>
+            <input id="yt-channel-name" value="${cfg.channel_name || ''}" placeholder="Primary YouTube channel"></div>
+          <div class="row-flex">
+            <div class="field" style="flex:1; min-width:160px;"><label>Default privacy</label>
+              <select id="yt-privacy">
+                ${['private','unlisted','public'].map(v=>`<option value="${v}" ${cfg.default_privacy_status===v?'selected':''}>${v}</option>`).join('')}
+              </select></div>
+            <div class="field" style="flex:1; min-width:160px;"><label>Category ID</label>
+              <input id="yt-category" value="${cfg.default_category_id || '28'}"></div>
+            <div class="field" style="width:120px;"><label>Language</label>
+              <input id="yt-language" value="${cfg.default_language || 'en'}"></div>
+          </div>
+          <div class="field"><label>Default tags (comma separated)</label>
+            <input id="yt-tags" value="${(cfg.default_tags || []).join(', ')}" placeholder="ai, tech news, reviews"></div>
+          <div class="field"><label>Description footer</label>
+            <textarea id="yt-footer" rows="3" placeholder="Reusable links, disclosure, subscribe CTA">${cfg.upload_description_footer || ''}</textarea></div>
+          <div class="row-flex">
+            <label class="mono-sm" style="display:flex; align-items:center; gap:7px;">
+              <input id="yt-kids" type="checkbox" ${cfg.made_for_kids ? 'checked' : ''} style="width:auto;"> Made for kids
+            </label>
+            <label class="mono-sm" style="display:flex; align-items:center; gap:7px;">
+              <input id="yt-auto" type="checkbox" ${cfg.auto_publish_enabled ? 'checked' : ''} style="width:auto;"> Auto publish enabled
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="panel" style="max-width:420px;">
+        <div class="panel-head"><div class="panel-title">YOUTUBE OAUTH</div></div>
+        <div class="panel-body">
+          <div class="rail-meta" style="margin-bottom:12px;">Credential fields are write-only. Leave a field blank to keep its stored value.</div>
+          <div class="row-flex" style="margin-bottom:12px;">
+            <span class="badge ${cfg.has_client_id ? 'ready' : 'notstarted'}">Client ID ${cfg.has_client_id ? 'set' : 'missing'}</span>
+            <span class="badge ${cfg.has_client_secret ? 'ready' : 'notstarted'}">Secret ${cfg.has_client_secret ? 'set' : 'missing'}</span>
+            <span class="badge ${cfg.has_refresh_token ? 'ready' : 'notstarted'}">Refresh token ${cfg.has_refresh_token ? 'set' : 'missing'}</span>
+          </div>
+          <div class="field"><label>OAuth client ID</label>
+            <input id="yt-client-id" placeholder="${cfg.has_client_id ? 'Stored; leave blank to keep' : 'Paste client ID'}"></div>
+          <div class="field"><label>OAuth client secret</label>
+            <input id="yt-client-secret" type="password" placeholder="${cfg.has_client_secret ? 'Stored; leave blank to keep' : 'Paste client secret'}"></div>
+          <div class="field"><label>Refresh token</label>
+            <input id="yt-refresh-token" type="password" placeholder="${cfg.has_refresh_token ? 'Stored; leave blank to keep' : 'Paste refresh token'}"></div>
+          <button onclick="saveYouTubeConfig()">Save YouTube config</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function saveYouTubeConfig(){
+  const tags = (document.getElementById('yt-tags').value || '')
+    .split(',').map(t => t.trim()).filter(Boolean);
+  await api('/youtube-config', {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      channel_id: document.getElementById('yt-channel-id').value || null,
+      channel_name: document.getElementById('yt-channel-name').value || null,
+      default_privacy_status: document.getElementById('yt-privacy').value,
+      default_category_id: document.getElementById('yt-category').value || '28',
+      default_language: document.getElementById('yt-language').value || 'en',
+      default_tags: tags,
+      made_for_kids: document.getElementById('yt-kids').checked,
+      auto_publish_enabled: document.getElementById('yt-auto').checked,
+      upload_description_footer: document.getElementById('yt-footer').value || null,
+      client_id: document.getElementById('yt-client-id').value || null,
+      client_secret: document.getElementById('yt-client-secret').value || null,
+      refresh_token: document.getElementById('yt-refresh-token').value || null,
+    })
+  });
+  alert('YouTube configuration saved.');
+  renderSettings();
+}
+
+// ---------- DETAIL ----------
+const PRODUCT_TYPES = ['PRODUCT_REVIEW','PRODUCT_FEATURES','PRODUCT_COMPARISON','BUYING_GUIDE','UNBOXING'];
+let _finalPackageOpen = false;
+let _finalPackageData = null;
+
+async function renderDetail(id){
+  const root = document.getElementById('view-root');
+  root.innerHTML = `<div class="empty">Loading project #${id}…</div>`;
+  const [project, claims, sources, qualityGate, assets, observations] = await Promise.all([
+    api(`/projects/${id}`), api(`/projects/${id}/claims`), api(`/projects/${id}/sources`),
+    apiSoft(`/projects/${id}/quality-gate`), api(`/projects/${id}/assets`),
+    api(`/projects/${id}/observations`)
+  ]);
+
+  const canRepurpose = project.stage_runs.some(r => r.stage === 'PUBLISH' && r.status === 'SUCCEEDED');
+  const isProductType = PRODUCT_TYPES.includes(project.content_type);
+
+  root.innerHTML = `
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <div class="panel-title">${project.title}</div>
+          <div class="rail-meta" style="margin-top:3px;">${project.topic}</div>
+        </div>
+        ${stateBadge(project.pipeline_state)}
+      </div>
+      <div class="panel-body">
+        ${railHTML(project.current_stage, project.pipeline_state)}
+        <div class="row-flex" style="margin-top:16px;">
+          <button onclick="runStage(${project.id})">Run current stage (${project.current_stage})</button>
+          <button class="ghost" onclick="approveStage(${project.id})">Approve & advance</button>
+          <button class="ghost" onclick="runSlice(${project.id})">Run AV→Research→FactCheck</button>
+          <button class="ghost" onclick="runFullPipeline(${project.id})">Run full pipeline →Publish</button>
+          ${canRepurpose ? `<button class="ghost" onclick="repurpose(${project.id})">Repurpose into Shorts</button>` : ''}
+          <button class="ghost" onclick="refreshResearch(${project.id})">Refresh research if stale</button>
+          <button class="ghost" onclick="toggleFinalPackage(${project.id})">${_finalPackageOpen ? 'Hide' : 'View'} final package</button>
+        </div>
+      </div>
+    </div>
+
+    ${_finalPackageOpen && _finalPackageData ? `
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">FINAL VIDEO PACKAGE</div></div>
+      <div class="panel-body">
+        <pre class="mono-sm" style="white-space:pre-wrap; max-height:400px; overflow:auto; margin:0;">${JSON.stringify(_finalPackageData, null, 2).replace(/</g,'&lt;')}</pre>
+      </div>
+    </div>` : ''}
+
+    ${qualityGate ? `
+    <div class="panel">
+      <div class="panel-head">
+        <div class="panel-title">FINAL QUALITY GATE</div>
+        <span class="badge ${qualityGate.verdict === 'READY_TO_PUBLISH' ? 'ready' : qualityGate.verdict === 'DO_NOT_PUBLISH' ? 'blocked' : 'review'}">${qualityGate.verdict.replace(/_/g,' ')}</span>
+      </div>
+      <div class="panel-body">
+        <div class="rail-meta" style="margin-bottom:10px;">Overall: <b style="color:var(--text)">${qualityGate.overall_score}</b> / 120</div>
+        <div class="row-flex">
+          ${['newsworthiness','accuracy','research','originality','script','voice','visuals','copyright','thumbnail','title','viewer_value','freshness']
+            .map(k => `<span class="badge notstarted">${k.replace(/_/g,' ')}: ${qualityGate[k]}/10</span>`).join('')}
+        </div>
+      </div>
+    </div>` : ''}
+
+    ${isProductType ? `
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">FIRST-PARTY OBSERVATIONS</div></div>
+      <div class="panel-body">
+        <div class="rail-meta" style="margin-bottom:10px;">Hands-on notes feed the Script agent's Observed-vs-Expected distinction for unboxing/product content.</div>
+        <div class="field"><label>Box condition</label><input id="obs-box" value="${observations.box_condition || ''}"></div>
+        <div class="field"><label>Included accessories</label><input id="obs-accessories" value="${observations.included_accessories || ''}"></div>
+        <div class="field"><label>Weight</label><input id="obs-weight" value="${observations.weight || ''}"></div>
+        <div class="field"><label>First impressions</label><input id="obs-impressions" value="${observations.first_impressions || ''}"></div>
+        <button onclick="saveObservations(${project.id})">Save observations</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">UPLOADS / ASSETS (${assets.length})</div></div>
+      <div class="panel-body">
+        <div class="row-flex" style="margin-bottom:12px;">
+          <input type="file" id="upload-file">
+          <button class="ghost" onclick="uploadFile(${project.id})">Upload</button>
+        </div>
+        ${assets.length === 0 ? '<div class="empty">No assets yet.</div>' :
+          assets.map(a=>`
+            <div class="claim-row">
+              <div style="font-size:12.5px;">${a.original_filename || a.url_or_path}<div class="rail-meta" style="margin-top:2px;">${a.asset_type}${a.is_user_upload ? ' · uploaded' : ''}</div></div>
+              <span class="badge notstarted">${a.copyright_status}</span>
+            </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">CLAIMS (${claims.length})</div></div>
+      <div class="panel-body">
+        ${claims.length === 0 ? '<div class="empty">No claims recorded yet — run Research.</div>' :
+          claims.map(c=>`
+            <div class="claim-row">
+              <div style="font-size:12.5px;">${c.text}<div class="rail-meta" style="margin-top:2px;">${c.claim_type} · confidence ${c.confidence}</div></div>
+              <span class="vs ${c.verification_status}">${c.verification_status.replace(/_/g,' ')}</span>
+            </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">SOURCES (${sources.length})</div></div>
+      <div class="panel-body">
+        ${sources.length === 0 ? '<div class="empty">No sources yet.</div>' :
+          sources.map(s=>`
+            <div class="claim-row">
+              <div style="font-size:12.5px;">${s.title || s.url}<div class="rail-meta" style="margin-top:2px;">${s.publisher||''}</div></div>
+              <span class="badge notstarted">${s.source_tier}</span>
+            </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">STAGE RUN HISTORY (${project.stage_runs.length})</div></div>
+      <table>
+        <thead><tr><th>Stage</th><th>Ver.</th><th>Status</th><th>Score</th><th>Current</th><th>Created</th></tr></thead>
+        <tbody>
+        ${project.stage_runs.map(r=>`
+          <tr>
+            <td class="mono-sm">${r.stage}</td>
+            <td class="mono-sm">v${r.version_number}</td>
+            <td class="mono-sm">${r.status}</td>
+            <td class="mono-sm">${r.score ?? '—'}</td>
+            <td class="mono-sm">${r.is_current ? 'yes' : ''}</td>
+            <td class="mono-sm">${new Date(r.created_at).toISOString().slice(0,16).replace('T',' ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function runStage(id){
+  await api(`/projects/${id}/run-stage`, {method:'POST'});
+  renderDetail(id);
+}
+async function approveStage(id){
+  await api(`/projects/${id}/approve`, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'APPROVE'})
+  });
+  renderDetail(id);
+}
+async function runSlice(id){
+  await api(`/projects/${id}/run-vertical-slice`, {method:'POST'});
+  renderDetail(id);
+}
+async function runFullPipeline(id){
+  await api(`/projects/${id}/run-full-pipeline`, {method:'POST'});
+  renderDetail(id);
+}
+async function repurpose(id){
+  const shorts = await api(`/projects/${id}/repurpose`, {method:'POST'});
+  alert(`Created ${shorts.length} new Short project(s) from this video's Publish output.`);
+  renderDetail(id);
+}
+
+async function refreshResearch(id){
+  const project = await api(`/projects/${id}/refresh-research`, {method:'POST'});
+  renderDetail(id);
+}
+
+async function toggleFinalPackage(id){
+  if(_finalPackageOpen){
+    _finalPackageOpen = false;
+    _finalPackageData = null;
+  } else {
+    _finalPackageData = await apiSoft(`/projects/${id}/final-package`);
+    _finalPackageOpen = true;
+  }
+  renderDetail(id);
+}
+
+async function saveObservations(id){
+  const payload = {
+    box_condition: document.getElementById('obs-box').value,
+    included_accessories: document.getElementById('obs-accessories').value,
+    weight: document.getElementById('obs-weight').value,
+    first_impressions: document.getElementById('obs-impressions').value,
+  };
+  // Drop empty fields — the API rejects unknown keys but empty strings for
+  // known fields are fine; still, no point overwriting a saved value with "".
+  Object.keys(payload).forEach(k => { if(!payload[k]) delete payload[k]; });
+  await api(`/projects/${id}/observations`, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+  });
+  renderDetail(id);
+}
+
+async function uploadFile(id){
+  const input = document.getElementById('upload-file');
+  if(!input.files || input.files.length === 0){ alert('Choose a file first.'); return; }
+  const formData = new FormData();
+  formData.append('file', input.files[0]);
+  const headers = {};
+  if(API_KEY) headers['X-API-Key'] = API_KEY;
+  const res = await fetch(`${API}/projects/${id}/upload`, {method:'POST', headers, body: formData});
+  if(!res.ok){ alert('Upload failed: ' + await res.text()); return; }
+  renderDetail(id);
+}
+
+navigate('dashboard');
+</script>
+</body>
+</html>
