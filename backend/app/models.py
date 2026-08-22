@@ -13,6 +13,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from .database import Base
+from sqlalchemy.types import TypeDecorator, Text as _Text
+from .crypto import encrypt_secret, decrypt_secret
 
 
 def utcnow():
@@ -124,11 +126,44 @@ class ApprovalAction(str, enum.Enum):
     SEND_BACK = "SEND_BACK"
     REJECT = "REJECT"
 
+class JobStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+class EncryptedText(TypeDecorator):
+    """Transparently encrypts on write, decrypts on read. Column stays TEXT
+    in the actual schema -- Fernet ciphertext is ASCII-safe base64, so no
+    migration is needed on the column type itself, only on re-saving
+    existing plaintext rows once this is deployed (see the note in the
+    YouTubeConfig migration below)."""
+    impl = _Text
+    cache_ok = True
 
+    def process_bind_param(self, value, dialect):
+        return encrypt_secret(value)
+
+    def process_result_value(self, value, dialect):
+        return decrypt_secret(value)
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, nullable=False, unique=True, index=True)
+    hashed_password = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=utcnow)
+
+    projects = relationship("Project", back_populates="owner")
 class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # nullable for now -- see migration note
+
+    owner = relationship("User", back_populates="projects")
     title = Column(String, nullable=False)
     topic = Column(String, nullable=False)
     content_type = Column(Enum(ContentType), nullable=False)
@@ -316,9 +351,9 @@ class YouTubeConfig(Base):
     made_for_kids = Column(Boolean, default=False)
     auto_publish_enabled = Column(Boolean, default=False)
     upload_description_footer = Column(Text, nullable=True)
-    client_id = Column(Text, nullable=True)
-    client_secret = Column(Text, nullable=True)
-    refresh_token = Column(Text, nullable=True)
+    client_id = Column(EncryptedText, nullable=True)
+    client_secret = Column(EncryptedText, nullable=True)
+    refresh_token = Column(EncryptedText, nullable=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
@@ -352,3 +387,22 @@ class SchedulerLock(Base):
     holder = Column(String, nullable=True)   # opaque identifier for whichever process holds it
     acquired_at = Column(DateTime, nullable=True)
     expires_at = Column(DateTime, nullable=True)
+
+
+class JobRun(Base):
+    """Durable record of an async job, independent of Celery's own result
+    backend (which expires results and isn't queryable by arbitrary filters
+    the way a real table is). One row per enqueued task -- the API reports
+    status from this table, never from Celery directly."""
+    __tablename__ = "job_runs"
+
+    id = Column(Integer, primary_key=True)
+    job_type = Column(String, nullable=False)  # e.g. "run_stage", later "synthesize_voice", "render_video"
+    celery_task_id = Column(String, nullable=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
+    status = Column(Enum(JobStatus), default=JobStatus.PENDING)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)

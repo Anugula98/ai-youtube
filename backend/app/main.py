@@ -32,8 +32,11 @@ from .config import get_settings
 from .schemas import (
     ProjectCreate, ProjectOut, ProjectDetailOut, ApprovalIn,
     ScheduleConfigIn, ScheduleConfigOut, IdeaVaultEntryIn, IdeaVaultEntryOut,
-    YouTubeConfigIn, YouTubeConfigOut,
+    YouTubeConfigIn, YouTubeConfigOut,UserCreate, UserOut, LoginIn, TokenOut, RefreshIn, JobRunOut
 )
+from .security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, InvalidTokenError
+from .deps import get_current_user, require_project_owner
+
 from . import pipeline as pl
 from . import scheduling as sched
 from . import scheduler as bg_scheduler
@@ -64,6 +67,13 @@ if settings.is_production and settings.cors_origins.strip() == "*":
         "CORS_ORIGINS is '*' while ENV=production. Set an explicit comma-separated "
         "origin list in the environment before starting in production."
     )
+if settings.is_production and not settings.encryption_key:
+    raise RuntimeError(
+        "ENCRYPTION_KEY is not set while ENV=production. Generate one and set it "
+        "before starting -- see config.py's encryption_key docstring."
+    )
+if settings.is_production and settings.jwt_secret_key == "CHANGE_ME_INSECURE_DEV_ONLY":
+    raise RuntimeError("JWT_SECRET_KEY is still the insecure default while ENV=production.")
 
 app = FastAPI(title="AI YouTube Newsroom API", debug=settings.debug)
 
@@ -200,9 +210,11 @@ def readyz():
         raise HTTPException(status_code=503, detail=f"Database unavailable: {exc}")
 
 
-@app.post("/api/projects", response_model=ProjectOut, dependencies=[Depends(require_api_key)])
-def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
+#@app.post("/api/projects", response_model=ProjectOut, dependencies=[Depends(require_api_key)])
+@app.post("/api/projects", response_model=ProjectOut)
+def create_project(payload: ProjectCreate, db: Session = Depends(get_db),current_user: m.User = Depends(get_current_user)):
     project = m.Project(
+        user_id=current_user.id,   
         title=payload.title,
         topic=payload.topic,
         content_type=payload.content_type,
@@ -225,16 +237,17 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db)):
     return project
 
 
-@app.get("/api/projects", response_model=List[ProjectOut], dependencies=[Depends(require_api_key)])
-def list_projects(db: Session = Depends(get_db)):
-    return db.query(m.Project).order_by(m.Project.created_at.desc()).all()
+#@app.get("/api/projects", response_model=List[ProjectOut], dependencies=[Depends(require_api_key)])
+@app.get("/api/projects", response_model=List[ProjectOut])
+def list_projects(db: Session = Depends(get_db), current_user: m.User = Depends(get_current_user)):
+
+    return db.query(m.Project).filter(m.Project.user_id == current_user.id).order_by(m.Project.created_at.desc()).all()
 
 
-@app.get("/api/projects/{project_id}", response_model=ProjectDetailOut, dependencies=[Depends(require_api_key)])
-def get_project(project_id: int, db: Session = Depends(get_db)):
-    project = db.get(m.Project, project_id)
-    if not project:
-        raise HTTPException(404, "Project not found")
+
+#@app.get("/api/projects/{project_id}", response_model=ProjectDetailOut, dependencies=[Depends(require_api_key)])
+@app.get("/api/projects/{project_id}", response_model=ProjectDetailOut)
+def get_project(project: m.Project = Depends(require_project_owner)):
     return project
 
 
@@ -980,3 +993,59 @@ def get_final_package(project_id: int, db: Session = Depends(get_db)):
         "pipeline_state": project.pipeline_state.value,
         "current_stage": project.current_stage.value,
     }
+
+
+# ---------------------------------------------------------------------------
+# Auth (Phase 1 foundation)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/auth/register", response_model=UserOut)
+def register(payload: UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(m.User).filter(m.User.email == payload.email).first()
+    if existing:
+        raise HTTPException(400, "An account with this email already exists")
+    user = m.User(
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        display_name=payload.display_name,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    logger.info("Registered user id=%s email=%s", user.id, user.email)
+    return user
+
+
+@app.post("/api/auth/login", response_model=TokenOut)
+def login(payload: LoginIn, db: Session = Depends(get_db)):
+    user = db.query(m.User).filter(m.User.email == payload.email).first()
+    # Deliberately identical error for "no such user" and "wrong password" --
+    # distinguishing them lets an attacker enumerate registered emails.
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(401, "Incorrect email or password")
+    if not user.is_active:
+        raise HTTPException(403, "Account is disabled")
+    return TokenOut(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+    )
+
+
+@app.post("/api/auth/refresh", response_model=TokenOut)
+def refresh(payload: RefreshIn, db: Session = Depends(get_db)):
+    try:
+        user_id = decode_token(payload.refresh_token, expected_type="refresh")
+    except InvalidTokenError as exc:
+        raise HTTPException(401, f"Invalid refresh token: {exc}")
+    user = db.get(m.User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(401, "User not found or inactive")
+    return TokenOut(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),  # rotate -- see note below
+    )
+
+
+@app.get("/api/auth/me", response_model=UserOut)
+def get_me(current_user: m.User = Depends(get_current_user)):
+    return current_user

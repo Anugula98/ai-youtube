@@ -4,11 +4,51 @@ from __future__ import annotations
 import datetime as dt
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 from .models import ContentType, Priority, PipelineMode, Stage, PipelineState
 
 
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str | None = None
+
+
+class UserOut(BaseModel):
+    id: int
+    email: str
+    display_name: str | None
+    class Config:
+        from_attributes = True
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshIn(BaseModel):
+    refresh_token: str
+
+
+class JobRunOut(BaseModel):
+    id: int
+    job_type: str
+    status: str
+    project_id: int | None
+    result: dict | None
+    error: str | None
+    created_at: str
+    class Config:
+        from_attributes = True
 class ScheduleConfigIn(BaseModel):
     full_videos_per_day: int = 1
     shorts_per_day: int = 24

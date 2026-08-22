@@ -10,3 +10,9 @@ anthropic==0.34.2
 python-multipart==0.0.12
 apscheduler==3.10.4
 requests==2.32.3
+celery==5.4.0
+redis==5.0.8
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+cryptography==43.0.1
+email-validator==2.2.0

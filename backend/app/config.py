@@ -26,6 +26,31 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
 
     # --- Auth ---
+
+    # Shared-secret API key required on every /api/* request when set. This
+    # remains available for service-to-service calls (e.g. the scheduler
+    # hitting its own API), but user-facing auth is now real JWT-based auth
+    # (see security.py) -- see get_current_user() in deps.py, which is what
+    # project-scoped endpoints should depend on going forward.
+    api_key: str | None = None
+
+    jwt_secret_key: str = "CHANGE_ME_INSECURE_DEV_ONLY"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60 * 24  # 24h
+    jwt_refresh_token_expire_minutes: int = 60 * 24 * 30  # 30 days
+
+    # --- Secret encryption ---
+    # Fernet key (44-char urlsafe-base64 string) used to encrypt YouTubeConfig's
+    # client_secret/refresh_token at rest -- see crypto.py. Generate one with:
+    #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # There is no safe default for this one -- app startup should fail loudly
+    # in production if it's unset (see the is_production check added below).
+    encryption_key: str | None = None
+
+    # --- Job queue ---
+    redis_url: str = "redis://localhost:6379/0"
+
+
     # Shared-secret API key required on every /api/* request when set. Leave unset only
     # for local development; production deployments must set this (see .env.example).
     api_key: str | None = None
